@@ -7,7 +7,7 @@ if [ -f src/non_inclusive_cache.cc.bak ]; then
     if [ -f src/cache.cc ]; then
         mv src/cache.cc src/exclusive_cache.cc.bak
     fi
-    mv src/exclusive_cache.cc.bak src/cache.cc
+    mv src/non_inclusive_cache.cc.bak src/cache.cc
 elif [ -f src/exclusive_cache.cc.bak ]; then
     echo "non_inclusive_cache.cc.bak not found, but exclusive_cache.cc.bak exists. Keeping files as-is."
 else
