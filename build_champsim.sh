@@ -1,19 +1,20 @@
 #!/bin/bash
 
 
-# --- Check and handle cache files ---
-if [ -f src/non_inclusive_cache.cc.bak ]; then
-    echo "Found non_inclusive_cache.cc.bak. Swapping cache files..."
-    if [ -f src/cache.cc ]; then
-        mv src/cache.cc src/exclusive_cache.cc.bak
-    fi
-    mv src/non_inclusive_cache.cc.bak src/cache.cc
-elif [ -f src/exclusive_cache.cc.bak ]; then
-    echo "non_inclusive_cache.cc.bak not found, but exclusive_cache.cc.bak exists. Keeping files as-is."
+
+# --- Copy content of exclusive_cache.cc from cache_hierarchy to src/cache.cc ---
+SOURCE_FILE="cache_hierarchies/non_inclusive_cache.cc"
+TARGET_FILE="src/cache.cc"
+
+if [ -f "$SOURCE_FILE" ]; then
+    echo "Copying content of $SOURCE_FILE to $TARGET_FILE..."
+    cp "$SOURCE_FILE" "$TARGET_FILE"
 else
-    echo "[ERROR] Neither exclusive_cache.cc.bak nor non_inclusive_cache.cc.bak found in src. Cannot proceed."
+    echo "[ERROR] $SOURCE_FILE not found. Cannot proceed."
     exit 1
 fi
+# ... rest of your build script ...
+
 
 
 # if [ "$#" -lt 18 ]; then
