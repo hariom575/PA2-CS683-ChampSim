@@ -51,7 +51,7 @@ There are some other useful metrics printed out at the end of simulation. <be>
 6. sudo apt-get install gcc-7
 7. sudo apt-get install g++-7
 8. sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-7 0
-. sudo update-alternatives --install /us/bin/gcc gcc /ust/bin/gcc-7 0
+10. sudo update-alternatives --install /us/bin/gcc gcc /ust/bin/gcc-7 0
     
 --In case the GCC and G++ is already present in /usr/bin (run ./gcc-7 -v in /usr/bin), install the alternative and set it using
 
