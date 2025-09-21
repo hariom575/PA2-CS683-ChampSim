@@ -45,14 +45,13 @@ There are some other useful metrics printed out at the end of simulation. <be>
 ## Steps to download gcc version 7 in ubuntu:
 1. sudo apt update
 2. sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-3. vim /etc/apt/sources.list
-4. sudo nano /etc/apt/sources.list
-5. Update the last line with deb [arch=amd64] http://archive.ubuntu.com/ubuntu focal main universe
-6. sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-7. sudo apt-get install gcc-7
-8. sudo apt-get install g++-7
-9. sudo update-alternatives -install /usr/bin/g++ g++ /usr/bin/g++-7 0
-10. sudo update-alternatives -install /us/bin/gcc gcc /ust/bin/gcc-7 0
+3. vim /etc/apt/sources.list or sudo nano /etc/apt/sources.list
+4. Update the last line with deb [arch=amd64] http://archive.ubuntu.com/ubuntu focal main universe
+5. sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+6. sudo apt-get install gcc-7
+7. sudo apt-get install g++-7
+8. sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-7 0
+. sudo update-alternatives --install /us/bin/gcc gcc /ust/bin/gcc-7 0
     
 --In case the GCC and G++ is already present in /usr/bin (run ./gcc-7 -v in /usr/bin), install the alternative and set it using
 
