@@ -1,19 +1,21 @@
 #!/bin/bash
 
-
 # --- Check and handle cache files ---
-if [ -f src/non_inclusive_cache.cc.bak ]; then
-    echo "Found non_inclusive_cache.cc.bak. Swapping cache files..."
+if [ -f src/exclusive_cache.cc.bak ]; then
+    echo "Found exclusive_cache.cc.bak. Swapping cache files..."
     if [ -f src/cache.cc ]; then
-        mv src/cache.cc src/exclusive_cache.cc.bak
+        mv src/cache.cc src/non_inclusive_cache.cc.bak
     fi
     mv src/exclusive_cache.cc.bak src/cache.cc
-elif [ -f src/exclusive_cache.cc.bak ]; then
-    echo "non_inclusive_cache.cc.bak not found, but exclusive_cache.cc.bak exists. Keeping files as-is."
+elif [ -f src/non_inclusive_cache.cc.bak ]; then
+    echo "exclusive_cache.cc.bak not found, but non_inclusive_cache.cc.bak exists. Keeping files as-is."
 else
     echo "[ERROR] Neither exclusive_cache.cc.bak nor non_inclusive_cache.cc.bak found in src. Cannot proceed."
     exit 1
 fi
+
+# ... rest of your build script ...
+
 
 
 # if [ "$#" -lt 18 ]; then
