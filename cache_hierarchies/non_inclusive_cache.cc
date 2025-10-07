@@ -197,7 +197,7 @@ void CACHE::handle_fill()
 
 
         // is this dirty?
-        if (!(cache_type == IS_LLC && !block[set][way].dirty)) {
+        if (block[set][way].dirty) {
 
             // check if the lower level WQ has enough room to keep this writeback request
             if (lower_level) {
@@ -695,7 +695,7 @@ if (writeback_cpu == NUM_CPUS)
                 uint8_t  do_fill = 1;
 
                 // is this dirty?
-                if (!(cache_type == IS_LLC && !block[set][way].dirty)) {
+                if (block[set][way].dirty) {
 
                     // check if the lower level WQ has enough room to keep this writeback request
                     if (lower_level) { 
