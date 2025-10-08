@@ -14,7 +14,7 @@ static const int PAGE_SHIFT = 12;       // 4KB page
 static const int LINE_SHIFT = 6;        // 64B line
 static const int LINES_PER_PAGE = 1 << (PAGE_SHIFT - LINE_SHIFT);
 static const int MAX_OFFSETS = 5;       // top-5 offsets per region
-static const int DEFAULT_TABLE_SIZE = 64;
+static const int DEFAULT_TABLE_SIZE = 128;
 
 // ---------------- DATA STRUCTURES ----------------
 struct OffsetEntry {

@@ -52,7 +52,7 @@ void CACHE::handle_fill()
         uint32_t set = get_set(MSHR.entry[mshr_index].address), way;
         way = (this->*find_victim)(fill_cpu, MSHR.entry[mshr_index].instr_id, set, block[set], MSHR.entry[mshr_index].ip, MSHR.entry[mshr_index].full_addr, MSHR.entry[mshr_index].type);
 
-        if (!(MSHR.entry[mshr_index].fill_level < fill_level)){
+        // if (!(MSHR.entry[mshr_index].fill_level < fill_level)){
         //Neelu: Fill Packet type for L2
         uint8_t fill_packet_type = 0; //1.Translation 2. Instruction 3. Data
 
@@ -413,10 +413,10 @@ void CACHE::handle_fill()
             }
 
 #endif	
-        }
-    }
+        
+    // }
             // check fill level
-            else if (MSHR.entry[mshr_index].fill_level < fill_level) {
+             if (MSHR.entry[mshr_index].fill_level < fill_level) {
 
                 if(cache_type == IS_STLB)
                 {
@@ -500,7 +500,7 @@ void CACHE::handle_fill()
             MSHR.num_returned--;
 
             update_fill_cycle();
-        
+        }
     }
 }
 
