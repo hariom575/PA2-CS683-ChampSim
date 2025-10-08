@@ -22,6 +22,14 @@ ostream& operator<<(ostream& os, const PACKET &packet)
 {
     return os << " cpu: " << packet.cpu << " instr_id: " << packet.instr_id << " Translated: " << +packet.translated << " address: " << hex << packet.address << " full_addr: " << packet.full_addr << dec << " full_virtual_address: " << hex << packet.full_virtual_address << " full_physical_address: " << packet.full_physical_address << dec << "Type: " << +packet.type << " event_cycle: " << packet.event_cycle <<  " current_core_cycle: " <<  current_core_cycle[packet.cpu] << endl;
 };
+namespace{
+    inline bool is_exclusive_victim_cache(uint8_t cache_type){
+        return cache_type == IS_L1I || cache_type == IS_L1D || cache_type == IS_L2C;
+    }
+    inline bool is_exclusive_souce_cahce(uint8_t cache_type){
+        return cache_type == IS_L2C || cache_type == IS_LLC;
+    }
+}
 
 void CACHE::handle_fill()
 {
@@ -197,10 +205,9 @@ void CACHE::handle_fill()
 
 
 
-        //It doesn't matter if it is dirty or not,
-       // Every eviction should result in lower lewel cache to be filled
-        // Maybe excpet when data is removed from LLC and it is not dirty
-        if (!(cache_type == IS_LLC && !block[set][way].dirty)) {
+        bool victim_valid = block[set][way].valid;
+        bool forward_to_lower = victim_valid && is_exclusive_victim_cache(cache_type) && lower_level;
+        if (block[set][way].dirty || forward_to_lower) {
 
             // check if the lower level WQ has enough room to keep this writeback request
             if (lower_level) {
@@ -699,8 +706,9 @@ if (writeback_cpu == NUM_CPUS)
                 uint8_t  do_fill = 1;
 
                 // is this dirty?
-                // if (!(cache_type == IS_LLC && !block[set][way].dirty)) {
-
+                bool victim_valid = block[set][way].valid;
+                bool forward_to_lower = victim_valid && is_exclusive_victim_cache(cache_type) && lower_level;
+                if (block[set][way].dirty || forward_to_lower) {
                     // check if the lower level WQ has enough room to keep this writeback request
                     if (lower_level) { 
                         if (lower_level->get_occupancy(2, block[set][way].address) == lower_level->get_size(2, block[set][way].address)) {
@@ -738,7 +746,7 @@ if (writeback_cpu == NUM_CPUS)
                             assert(0);
                     }
 #endif
-                // }
+                }
 
                 if (do_fill) {
                     // update prefetcher
