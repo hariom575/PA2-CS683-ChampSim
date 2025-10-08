@@ -34,6 +34,12 @@ re_instructions = re.compile(r'CPU\s+\d+\s+instructions:\s*([0-9]+)', re.IGNOREC
 re_pref_issued = re.compile(r'Prefetches issued[:\s]+([0-9]+)', re.IGNORECASE)
 re_pref_useful = re.compile(r'Prefetches useful[:\s]+(?:\(approx\):\s*)?([0-9]+)', re.IGNORECASE)
 
+re_l1d_mpki = re.compile(r'L1D TOTAL.*MPKI:\s*([0-9.]+)', re.IGNORECASE)
+re_l2_mpki  = re.compile(r'L2C TOTAL.*MPKI:\s*([0-9.]+)', re.IGNORECASE)
+re_llc_mpki = re.compile(r'LLC TOTAL.*MPKI:\s*([0-9.]+)', re.IGNORECASE)
+
+
+
 # Try to infer variant from filename
 def infer_variant_from_name(name):
     lname = name.lower()
@@ -45,6 +51,9 @@ def infer_variant_from_name(name):
         return 'table64'
     if '128' in lname:
         return 'table128'
+    if 'exclusive' in lname:
+        return 'exclusive'
+
     # fallback
     if 'pref' in lname or 'offset' in lname:
         # try to parse digits
@@ -111,6 +120,17 @@ def parse_file(path):
     if m:
         data['prefetch_useful'] = int(m.group(1))
 
+
+    m = re_l1d_mpki.search(text)
+    if m: data['l1d_mpki'] = float(m.group(1))
+
+    m = re_l2_mpki.search(text)
+    if m: data['l2_mpki'] = float(m.group(1))
+
+    m = re_llc_mpki.search(text)
+    if m: data['llc_mpki'] = float(m.group(1))
+
+
     return data
 
 # -------------------------
@@ -143,6 +163,7 @@ def main(output_dir, save_csv):
 
     # For plotting, create speedup plots per trace (baseline required per trace)
     traces = df['trace_folder'].unique()
+
     for t in traces:
         sub = df[df['trace_folder'] == t]
         # find baseline IPC for this trace
@@ -204,6 +225,34 @@ def main(output_dir, save_csv):
             plt.savefig(out_png)
             plt.close()
             print(f"Saved {out_png}")
+
+    # Handle Exclusive vs Baseline (Q2)
+    for trace in traces:
+        sub = df[df['trace_folder'] == trace]
+        if not {'baseline', 'exclusive'}.issubset(set(sub['variant'])):
+            continue
+
+        base_ipc = float(sub[sub['variant'] == 'baseline']['ipc'].iloc[0])
+        excl_ipc = float(sub[sub['variant'] == 'exclusive']['ipc'].iloc[0])
+        speedup = excl_ipc / base_ipc if base_ipc else None
+
+        # Print table row
+        print(f"\nExclusive vs Non-Inclusive — {trace}")
+        print(f"Baseline IPC={base_ipc:.4f}, Exclusive IPC={excl_ipc:.4f}, Speedup={speedup:.3f}")
+        print(f"L1D MPKI baseline={sub[sub['variant']=='baseline']['l1d_mpki'].iloc[0]}, exclusive={sub[sub['variant']=='exclusive']['l1d_mpki'].iloc[0]}")
+        print(f"L2C MPKI baseline={sub[sub['variant']=='baseline']['l2_mpki'].iloc[0]}, exclusive={sub[sub['variant']=='exclusive']['l2_mpki'].iloc[0]}")
+        print(f"LLC MPKI baseline={sub[sub['variant']=='baseline']['llc_mpki'].iloc[0]}, exclusive={sub[sub['variant']=='exclusive']['llc_mpki'].iloc[0]}")
+
+        # Plot bar chart for IPC comparison
+        plt.figure(figsize=(5,4))
+        plt.bar(['Baseline','Exclusive'], [base_ipc, excl_ipc], color=['gray','blue'])
+        plt.title(f"Exclusive vs Non-Inclusive IPC — {trace}")
+        plt.ylabel("IPC")
+        out_png = os.path.join(output_dir, f"exclusive_ipc_{trace}.png")
+        plt.savefig(out_png)
+        plt.close()
+        print(f"Saved {out_png}")
+
 
     print("Done.")
 
