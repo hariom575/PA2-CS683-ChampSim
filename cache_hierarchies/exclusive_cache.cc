@@ -38,12 +38,13 @@ void CACHE::handle_fill()
 #endif
 
         uint32_t mshr_index = MSHR.next_fill_index;
+       
 
         // find victim
         uint32_t set = get_set(MSHR.entry[mshr_index].address), way;
         way = (this->*find_victim)(fill_cpu, MSHR.entry[mshr_index].instr_id, set, block[set], MSHR.entry[mshr_index].ip, MSHR.entry[mshr_index].full_addr, MSHR.entry[mshr_index].type);
 
-
+        if (!(MSHR.entry[mshr_index].fill_level < fill_level)){
         //Neelu: Fill Packet type for L2
         uint8_t fill_packet_type = 0; //1.Translation 2. Instruction 3. Data
 
@@ -196,7 +197,9 @@ void CACHE::handle_fill()
 
 
 
-        // is this dirty?
+        //It doesn't matter if it is dirty or not,
+       // Every eviction should result in lower lewel cache to be filled
+        // Maybe excpet when data is removed from LLC and it is not dirty
         if (!(cache_type == IS_LLC && !block[set][way].dirty)) {
 
             // check if the lower level WQ has enough room to keep this writeback request
@@ -403,9 +406,10 @@ void CACHE::handle_fill()
             }
 
 #endif	
-
+        }
+    }
             // check fill level
-            if (MSHR.entry[mshr_index].fill_level < fill_level) {
+            else if (MSHR.entry[mshr_index].fill_level < fill_level) {
 
                 if(cache_type == IS_STLB)
                 {
@@ -489,7 +493,7 @@ void CACHE::handle_fill()
             MSHR.num_returned--;
 
             update_fill_cycle();
-        }
+        
     }
 }
 
@@ -695,7 +699,7 @@ if (writeback_cpu == NUM_CPUS)
                 uint8_t  do_fill = 1;
 
                 // is this dirty?
-                if (!(cache_type == IS_LLC && !block[set][way].dirty)) {
+                // if (!(cache_type == IS_LLC && !block[set][way].dirty)) {
 
                     // check if the lower level WQ has enough room to keep this writeback request
                     if (lower_level) { 
@@ -734,7 +738,7 @@ if (writeback_cpu == NUM_CPUS)
                             assert(0);
                     }
 #endif
-                }
+                // }
 
                 if (do_fill) {
                     // update prefetcher

@@ -1,22 +1,185 @@
 #include "cache.h"
+#include <vector>
+#include <array>
+#include <cstdint>
+#include <algorithm>
+#include <iostream>
+#include <limits>
+#include <cstdlib>
 
+using namespace std;
 
-void CACHE::l2c_prefetcher_initialize() 
-{
-    cout << "CPU " << cpu << " Region based L2 offset prefetcher" << endl;
+// ---------------- PARAMETERS ----------------
+static const int PAGE_SHIFT = 12;       // 4KB page
+static const int LINE_SHIFT = 6;        // 64B line
+static const int LINES_PER_PAGE = 1 << (PAGE_SHIFT - LINE_SHIFT);
+static const int MAX_OFFSETS = 5;       // top-5 offsets per region
+static const int DEFAULT_TABLE_SIZE = 64;
+
+// ---------------- DATA STRUCTURES ----------------
+struct OffsetEntry {
+    int32_t offset = 0;
+    uint32_t freq = 0;
+};
+
+struct RegionEntry {
+    uint64_t signature = 0;
+    uint64_t last_line = 0;
+    bool valid = false;
+    array<OffsetEntry, MAX_OFFSETS> offsets;
+    uint64_t last_access_cycle = 0;
+};
+
+// Prefetcher global state
+static vector<RegionEntry> region_table;
+static bool initialized = false;
+static int TABLE_SIZE = DEFAULT_TABLE_SIZE;
+static uint64_t prefetch_issued = 0;
+static uint64_t prefetch_useful = 0;
+
+// ---------------- HELPERS ----------------
+inline uint64_t line_index(uint64_t addr) { return addr >> LINE_SHIFT; }
+inline uint64_t page_base(uint64_t addr) { return (addr >> PAGE_SHIFT) << PAGE_SHIFT; }
+inline uint64_t make_signature(uint64_t addr, uint64_t ip) {
+    uint64_t page = addr >> PAGE_SHIFT;
+    uint64_t v = page ^ (ip * 0x9e3779b97f4a7c15ULL);
+    v ^= v >> 33; v *= 0xff51afd7ed558ccdULL;
+    v ^= v >> 33; v *= 0xc4ceb9fe1a85ec53ULL;
+    v ^= v >> 33;
+    return v;
 }
 
-uint32_t CACHE::l2c_prefetcher_operate(uint64_t addr, uint64_t ip, uint8_t cache_hit, uint8_t type, uint32_t metadata_in, uint8_t critical_ip_flag)
-{
-   
+inline RegionEntry &get_region_entry(uint64_t sig) {
+    return region_table[sig % TABLE_SIZE];
 }
 
-uint32_t CACHE::l2c_prefetcher_cache_fill(uint64_t addr, uint32_t set, uint32_t match, uint8_t prefetch, uint64_t evicted_addr, uint32_t metadata_in)
-{
-  return metadata_in;
+static void update_offsets(RegionEntry &e, int32_t offset) {
+    if (offset == 0) return;
+
+    // Update frequency if already present
+    for (auto &oe : e.offsets) {
+        if (oe.offset == offset && oe.freq > 0) {
+            if (oe.freq < numeric_limits<uint32_t>::max()) oe.freq++;
+            return;
+        }
+    }
+
+    // Otherwise, insert into empty slot or replace min frequency
+    int replace_idx = -1;
+    uint32_t min_freq = numeric_limits<uint32_t>::max();
+    for (int i = 0; i < MAX_OFFSETS; ++i) {
+        if (e.offsets[i].freq == 0) { replace_idx = i; break; }
+        if (e.offsets[i].freq < min_freq) {
+            min_freq = e.offsets[i].freq;
+            replace_idx = i;
+        }
+    }
+
+    if (replace_idx >= 0) {
+        e.offsets[replace_idx].offset = offset;
+        e.offsets[replace_idx].freq = 1;
+    }
 }
 
-void CACHE::l2c_prefetcher_final_stats()
-{
+static bool cmp(const pair<uint32_t,int32_t> &a, const pair<uint32_t,int32_t> &b) {
+    return a.first > b.first;
+}
 
+static void issue_prefetches(CACHE *cache, RegionEntry &e, uint64_t ref_addr, uint64_t ip) {
+    // Compute degree based on precision (optional)
+    int degree = 2; // simple fixed degree
+
+    vector<pair<uint32_t,int32_t>> offs;
+    for (int i = 0; i < MAX_OFFSETS; ++i) {
+        if (e.offsets[i].freq) offs.emplace_back(e.offsets[i].freq, e.offsets[i].offset);
+    }
+    if (offs.empty()) return;
+    sort(offs.begin(), offs.end(), cmp);
+
+    int issued = 0;
+    uint64_t page = page_base(ref_addr);
+    int64_t ref_line = line_index(ref_addr);
+
+    for (auto &o : offs) {
+        if (issued >= degree) break;
+
+        int64_t target_line = ref_line + o.second;
+        int64_t base_line = page >> LINE_SHIFT;
+
+        if (target_line < base_line || target_line >= base_line + LINES_PER_PAGE)
+            continue;
+
+        uint64_t target_addr = target_line << LINE_SHIFT;
+
+        if (target_addr == ref_addr) continue;
+
+        bool ok = cache->prefetch_line(ip, ref_addr, target_addr, FILL_L2, 0);
+        if (ok) { prefetch_issued++; issued++; }
+    }
+}
+
+// ---------------- PREFETCHER METHODS ----------------
+
+void CACHE::l2c_prefetcher_initialize() {
+    if (initialized) return;
+
+    const char *env = getenv("REGION_PREF_TABLE");
+    if (env) { int v = atoi(env); if (v > 0) TABLE_SIZE = v; }
+    else TABLE_SIZE = DEFAULT_TABLE_SIZE;
+
+    region_table.clear();
+    region_table.resize(TABLE_SIZE);
+    prefetch_issued = 0;
+    prefetch_useful = 0;
+    initialized = true;
+
+    cout << "CPU " << cpu << " Region-based L2 offset prefetcher (table=" << TABLE_SIZE << " entries)" << endl;
+}
+
+uint32_t CACHE::l2c_prefetcher_operate(uint64_t addr, uint64_t ip,
+                                       uint8_t cache_hit, uint8_t type,
+                                       uint32_t metadata_in, uint8_t is_writeback) 
+{
+    if (!initialized) l2c_prefetcher_initialize();
+
+    uint64_t sig = make_signature(addr, ip);
+    RegionEntry &e = get_region_entry(sig);
+
+    uint64_t cur_line = line_index(addr);
+
+    if (e.valid && e.signature == sig) {
+        int32_t offset = (int32_t)(cur_line - e.last_line);
+        if (offset != 0 && llabs(offset) < LINES_PER_PAGE) update_offsets(e, offset);
+        e.last_line = cur_line;
+        e.last_access_cycle = 1;
+    } else {
+        e.valid = true;
+        e.signature = sig;
+        e.last_line = cur_line;
+        e.last_access_cycle = 1;
+        for (auto &o : e.offsets) { o.offset = 0; o.freq = 0; }
+    }
+
+    // Only trigger prefetches on CPU misses, not writebacks
+    if (!is_writeback && cache_hit == 0) issue_prefetches(this, e, addr, ip);
+
+    return metadata_in;
+}
+
+uint32_t CACHE::l2c_prefetcher_cache_fill(uint64_t addr, uint32_t set, uint32_t match,
+                                          uint8_t prefetch, uint64_t evicted_addr,
+                                          uint32_t metadata_in)
+{
+    if (prefetch) prefetch_useful++;
+    return metadata_in;
+}
+
+void CACHE::l2c_prefetcher_final_stats() {
+    if (!initialized) return;
+
+    cout << "CPU " << cpu << " Region-based offset prefetcher stats:\n";
+    cout << "  Prefetches issued: " << prefetch_issued << "\n";
+    cout << "  Prefetches useful (approx): " << prefetch_useful << "\n";
+    double prec = (prefetch_issued ? (double)prefetch_useful / (double)prefetch_issued : 0.0);
+    cout << "  Precision (useful/issued): " << prec << "\n";
 }
