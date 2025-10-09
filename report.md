@@ -40,7 +40,7 @@ We implemented an **L2-based offset prefetcher** and evaluated its effect on **I
 |              | Table64           | 0.5123  | 47.58    | 1.11×              |
 |              | Table128          | 0.5141  | 47.57    | 1.11×              |
 
-📊 Example Plot:  
+📊  Plot:  
 ![Q1 Speedup](plots/q1_speedup_1st_trace1.png)  
 ![Q1 MPKI](plots/q1_mpki_1st_trace1.png)  
 
@@ -65,7 +65,7 @@ We implemented an **L2-based offset prefetcher** and evaluated its effect on **I
 | 2nd_trace4   | Non-Inclusive Base | 0.4623  | 47.56    |
 |              | Exclusive Base     | 0.4089  | 47.34    |
 
-📊 Example Plot:  
+📊  Plot:  
 ![Q2 IPC](plots/q2_ipc_cmp_2nd_trace1.png)  
 ![Q2 MPKI](plots/q2_mpki_cmp_2nd_trace1.png)  
 
@@ -102,7 +102,7 @@ We implemented an **L2-based offset prefetcher** and evaluated its effect on **I
 |              | Table64            | 0.4379  | 47.56    | 0.95×             | 1.07×           |
 |              | Table128           | 0.4382  | 47.58    | 0.95×             | 1.07×           |
 
-📊 Example Plot:  
+📊  Plot:  
 ![Q3 Speedup vs Non-Inclusive](plots/q3_speedup_noninc_baseline_3rd_trace1.png)  
 ![Q3 Speedup vs Exclusive](plots/q3_speedup_excl_baseline_3rd_trace1.png)  
 
@@ -123,6 +123,5 @@ We implemented an **L2-based offset prefetcher** and evaluated its effect on **I
 
 ## 6. References
 - ChampSim: [https://github.com/ChampSim/ChampSim](https://github.com/ChampSim/ChampSim)  
-- CS683 – Design and Engineering of Computing Systems  
-
+- CS683 – DAdvanced Computer Architecture
 ---
