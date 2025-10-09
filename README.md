@@ -1,7 +1,8 @@
-# CS683 – Programming Assignment 2  
-# TEAM : LATENCY YODDHAS
-## Data Prefetching in Exclusive vs Non-Inclusive Cache Hierarchies  
-
+---
+title: "CS683 – Programming Assignment 2"
+subtitle: "Data Prefetching in Exclusive vs Non-Inclusive Cache Hierarchies"
+author: "Team: Latency Yoddhas"
+date: "October 2025"
 ---
 
 ## 1. Introduction  
@@ -57,26 +58,14 @@ Key questions:
 |              | Table128          | 0.514095 | 47.5684 | 1.112×              |
 
 ### Plots for Q1  
-Below are the speedup and MPKI plots for each trace:
-
-#### Trace 1  
 ![Q1 Speedup 1st_trace1](plots/q1_speedup_1st_trace1.png)  
-*Figure:* Speedup (IPC_prefetch / IPC_baseline_noninc) vs table size for trace1.
-
 ![Q1 MPKI 1st_trace1](plots/q1_mpki_1st_trace1.png)  
-*Figure:* L2 MPKI vs table size for trace1.
-
-#### Trace 2  
 ![Q1 Speedup 1st_trace2](plots/q1_speedup_1st_trace2.png)  
-![Q1 MPKI 1st_trace2](plots/q1_mpki_1st_trace2.png)
-
-#### Trace 3  
+![Q1 MPKI 1st_trace2](plots/q1_mpki_1st_trace2.png)  
 ![Q1 Speedup 1st_trace3](plots/q1_speedup_1st_trace3.png)  
-![Q1 MPKI 1st_trace3](plots/q1_mpki_1st_trace3.png)
-
-#### Trace 4  
+![Q1 MPKI 1st_trace3](plots/q1_mpki_1st_trace3.png)  
 ![Q1 Speedup 1st_trace4](plots/q1_speedup_1st_trace4.png)  
-![Q1 MPKI 1st_trace4](plots/q1_mpki_1st_trace4.png)
+![Q1 MPKI 1st_trace4](plots/q1_mpki_1st_trace4.png)  
 
 **Analysis (Q1):**  
 - Prefetching improves IPC by ~10–25% depending on trace.  
@@ -101,22 +90,14 @@ Below are the speedup and MPKI plots for each trace:
 |              | Exclusive Base       | 0.408924 | 47.3371 |
 
 ### Plots for Q2
-
-#### Trace 1  
 ![Q2 IPC Comparison 2nd_trace1](plots/q2_ipc_cmp_2nd_trace1.png)  
-![Q2 MPKI Comparison 2nd_trace1](plots/q2_mpki_cmp_2nd_trace1.png)
-
-#### Trace 2  
+![Q2 MPKI Comparison 2nd_trace1](plots/q2_mpki_cmp_2nd_trace1.png)  
 ![Q2 IPC Comparison 2nd_trace2](plots/q2_ipc_cmp_2nd_trace2.png)  
-![Q2 MPKI Comparison 2nd_trace2](plots/q2_mpki_cmp_2nd_trace2.png)
-
-#### Trace 3  
+![Q2 MPKI Comparison 2nd_trace2](plots/q2_mpki_cmp_2nd_trace2.png)  
 ![Q2 IPC Comparison 2nd_trace3](plots/q2_ipc_cmp_2nd_trace3.png)  
-![Q2 MPKI Comparison 2nd_trace3](plots/q2_mpki_cmp_2nd_trace3.png)
-
-#### Trace 4  
+![Q2 MPKI Comparison 2nd_trace3](plots/q2_mpki_cmp_2nd_trace3.png)  
 ![Q2 IPC Comparison 2nd_trace4](plots/q2_ipc_cmp_2nd_trace4.png)  
-![Q2 MPKI Comparison 2nd_trace4](plots/q2_mpki_cmp_2nd_trace4.png)
+![Q2 MPKI Comparison 2nd_trace4](plots/q2_mpki_cmp_2nd_trace4.png)  
 
 **Analysis (Q2):**  
 - Exclusive baseline reduces IPC relative to non-inclusive baseline.  
@@ -131,44 +112,36 @@ Below are the speedup and MPKI plots for each trace:
 
 | Trace        | Variant             | IPC     | L2 MPKI  | Speedup vs NonInc | Speedup vs Excl |
 |--------------|----------------------|---------|----------|-------------------|-----------------|
-| 3rd_trace1   | NonInc Base           | 0.834309 | 22.1970 | 1.000×             | –               |
-|              | Exclusive Base        | 0.754818 | 21.9697 | –                 | 1.000×           |
-|              | Table32               | 0.840492 | 22.2002 | 1.007×             | 1.114×           |
-|              | Table64               | 0.840418 | 22.1980 | 1.007×             | 1.114×           |
-|              | Table128               | 0.840721 | 22.1980 | 1.008×             | 1.115×           |
+| 3rd_trace1   | NonInc Base           | 0.529026 | 40.3453 | 1.000×             | –               |
+|              | Exclusive Base        | 0.467969 | 40.1013 | –                 | 1.000×           |
+|              | Table32               | 0.504363 | 40.3370 | 0.953×             | 1.077×           |
+|              | Table64               | 0.505236 | 40.3351 | 0.955×             | 1.079×           |
+|              | Table128              | 0.505301 | 40.3372 | 0.955×             | 1.079×           |
 | 3rd_trace2   | NonInc Base           | 0.462268 | 47.6893 | 1.000×             | –               |
 |              | Exclusive Base        | 0.405598 | 47.4362 | –                 | 1.000×           |
 |              | Table32               | 0.435832 | 47.7132 | 0.943×             | 1.074×           |
 |              | Table64               | 0.436744 | 47.7068 | 0.945×             | 1.077×           |
-|              | Table128               | 0.436916 | 47.7054 | 0.945×             | 1.077×           |
+|              | Table128              | 0.436916 | 47.7054 | 0.945×             | 1.077×           |
 | 3rd_trace3   | NonInc Base           | 0.834309 | 22.1970 | 1.000×             | –               |
 |              | Exclusive Base        | 0.754818 | 21.9697 | –                 | 1.000×           |
 |              | Table32               | 0.840492 | 22.2002 | 1.007×             | 1.114×           |
 |              | Table64               | 0.840418 | 22.1980 | 1.007×             | 1.114×           |
-|              | Table128               | 0.840721 | 22.1980 | 1.008×             | 1.115×           |
+|              | Table128              | 0.840721 | 22.1980 | 1.008×             | 1.115×           |
 | 3rd_trace4   | NonInc Base           | 0.462276 | 47.5620 | 1.000×             | –               |
 |              | Exclusive Base        | 0.408924 | 47.3371 | –                 | 1.000×           |
 |              | Table32               | 0.437269 | 47.5798 | 0.946×             | 1.069×           |
 |              | Table64               | 0.437885 | 47.5604 | 0.947×             | 1.070×           |
-|              | Table128               | 0.438150 | 47.5783 | 0.948×             | 1.071×           |
+|              | Table128              | 0.438150 | 47.5783 | 0.948×             | 1.071×           |
 
-### Plots for Q3
-
-#### Trace 1  
+### Plots for Q3  
 ![Q3 Speedup vs Non-Inclusive 3rd_trace1](plots/q3_speedup_noninc_baseline_3rd_trace1.png)  
-![Q3 Speedup vs Exclusive 3rd_trace1](plots/q3_speedup_excl_baseline_3rd_trace1.png)
-
-#### Trace 2  
+![Q3 Speedup vs Exclusive 3rd_trace1](plots/q3_speedup_excl_baseline_3rd_trace1.png)  
 ![Q3 Speedup vs Non-Inclusive 3rd_trace2](plots/q3_speedup_noninc_baseline_3rd_trace2.png)  
-![Q3 Speedup vs Exclusive 3rd_trace2](plots/q3_speedup_excl_baseline_3rd_trace2.png)
-
-#### Trace 3  
+![Q3 Speedup vs Exclusive 3rd_trace2](plots/q3_speedup_excl_baseline_3rd_trace2.png)  
 ![Q3 Speedup vs Non-Inclusive 3rd_trace3](plots/q3_speedup_noninc_baseline_3rd_trace3.png)  
-![Q3 Speedup vs Exclusive 3rd_trace3](plots/q3_speedup_excl_baseline_3rd_trace3.png)
-
-#### Trace 4  
+![Q3 Speedup vs Exclusive 3rd_trace3](plots/q3_speedup_excl_baseline_3rd_trace3.png)  
 ![Q3 Speedup vs Non-Inclusive 3rd_trace4](plots/q3_speedup_noninc_baseline_3rd_trace4.png)  
-![Q3 Speedup vs Exclusive 3rd_trace4](plots/q3_speedup_excl_baseline_3rd_trace4.png)
+![Q3 Speedup vs Exclusive 3rd_trace4](plots/q3_speedup_excl_baseline_3rd_trace4.png)  
 
 **Analysis (Q3):**  
 - Prefetchers in exclusive cache **recover some performance**, particularly when compared to exclusive baseline (~7–11% improvements).  
@@ -176,19 +149,15 @@ Below are the speedup and MPKI plots for each trace:
 - Table size 128 is generally the best — but 64 is close enough, offering good tradeoff.
 
 ---
-## 5. Conclusion
+
+## 6. Conclusion
 - **Q1**: Prefetching improves IPC up to **25%** in non-inclusive cache.  
 - **Q2**: Exclusive cache baseline is weaker than non-inclusive.  
 - **Q3**: Exclusive cache + prefetching **recovers some performance**, but still lags non-inclusive.  
 - **Best config**: 128-entry table prefetcher.  
 
-
 ### Key Takeaways
 - Prefetching via region-based offset helps consistently across workloads.  
 - Exclusive caches impose a penalty, but prefetching can mitigate that.  
 - Best prefetcher configuration: **L2 offset, table size 128**.  
-- For practical design: 64 may suffice; dynamic table sizing and filtering of writeback noise are promising enhancements.
-
----
-
-
+- For practical design: 64 may suffice; dynamic table sizing and filtering of writeback noise are promising enhancements.  
