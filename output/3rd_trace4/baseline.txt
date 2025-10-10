@@ -1,4 +1,4 @@
-hariom@hariom-HP-Laptop-15s-fy5xxx:~/Documents/Github/PA2-CS683-ChampSim$ ./bin/champsim-no   -warmup_instructions 25000000   -simulation_instructions 25000000   -traces ../traces/trace4.champsimtrace.xz
+hariom@hariom-HP-Laptop-15s-fy5xxx:~/Documents/Github/PA2-CS683-ChampSim$ ./bin/champsim-no -warmup_instructions 25000000 -simulation_instructions 25000000 -traces ../traces/trace4.champsimtrace.xz
 
 *** ChampSim Multicore Out-of-Order Simulator ***
 
@@ -18,15 +18,15 @@ L1I has LRU replacement policy
 L1D has LRU replacement policy
 L2C has LRU replacement policy
 LLC has LRU replacement policy
-Heartbeat CPU 0 instructions: 10000007 cycles: 2547565 heartbeat IPC: 3.92532 cumulative IPC: 3.92532 (Simulation time: 0 hr 0 min 10 sec) 
-Heartbeat CPU 0 instructions: 20000003 cycles: 5091617 heartbeat IPC: 3.93074 cumulative IPC: 3.92803 (Simulation time: 0 hr 0 min 21 sec) 
+Heartbeat CPU 0 instructions: 10000007 cycles: 2547565 heartbeat IPC: 3.92532 cumulative IPC: 3.92532 (Simulation time: 0 hr 0 min 11 sec) 
+Heartbeat CPU 0 instructions: 20000003 cycles: 5091617 heartbeat IPC: 3.93074 cumulative IPC: 3.92803 (Simulation time: 0 hr 0 min 22 sec) 
 
 Warmup complete CPU 0 instructions: 25000001 cycles: 6366398 (Simulation time: 0 hr 0 min 27 sec) 
 
-Heartbeat CPU 0 instructions: 30000000 cycles: 16933007 heartbeat IPC: 0.844495 cumulative IPC: 0.473189 (Simulation time: 0 hr 0 min 53 sec) 
-Heartbeat CPU 0 instructions: 40000000 cycles: 38602828 heartbeat IPC: 0.461471 cumulative IPC: 0.465312 (Simulation time: 0 hr 1 min 49 sec) 
-Heartbeat CPU 0 instructions: 50000006 cycles: 60446698 heartbeat IPC: 0.457795 cumulative IPC: 0.462276 (Simulation time: 0 hr 2 min 46 sec) 
-Finished CPU 0 instructions: 25000005 cycles: 54080300 cumulative IPC: 0.462276 (Simulation time: 0 hr 2 min 46 sec) 
+Heartbeat CPU 0 instructions: 30000000 cycles: 16933007 heartbeat IPC: 0.844495 cumulative IPC: 0.473189 (Simulation time: 0 hr 0 min 55 sec) 
+Heartbeat CPU 0 instructions: 40000000 cycles: 38602828 heartbeat IPC: 0.461471 cumulative IPC: 0.465312 (Simulation time: 0 hr 1 min 52 sec) 
+Heartbeat CPU 0 instructions: 50000006 cycles: 60446698 heartbeat IPC: 0.457795 cumulative IPC: 0.462276 (Simulation time: 0 hr 2 min 50 sec) 
+Finished CPU 0 instructions: 25000005 cycles: 54080300 cumulative IPC: 0.462276 (Simulation time: 0 hr 2 min 50 sec) 
 
 ChampSim completed all CPUs
 
