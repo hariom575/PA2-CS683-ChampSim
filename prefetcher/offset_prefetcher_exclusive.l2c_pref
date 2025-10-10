@@ -1,185 +1,293 @@
 #include "cache.h"
 #include <vector>
-#include <array>
-#include <cstdint>
+#include <unordered_set>
+#include <unordered_map>
+#include <deque>
 #include <algorithm>
+#include <cstdlib>
 #include <iostream>
 #include <limits>
-#include <cstdlib>
 
-using namespace std;
+// ------------------------------
+// constants (derive from ChampSim)
+// ------------------------------
+static const int  LINES_PER_PAGE        = (1 << (LOG2_PAGE_SIZE - LOG2_BLOCK_SIZE));
+static const int  DEFAULT_TABLE_SIZE    = 64;          // override via OFFSET_TABLE=32/64/128
+static const int  TOPK                  = 5;           // keep top-5 offsets per page
+static const uint32_t CONF_THRESH       = 2;           // min "useful" confirmations
+static const uint32_t FREQ_MIN_FOR_USE  = 2;           // min frequency before we consider an offset
+static const size_t   RECENT_DEMAND_MAX = 4096;        // tiny recency filter (line addrs)
 
-// ---------------- PARAMETERS ----------------
-static const int PAGE_SHIFT = 12;       // 4KB page
-static const int LINE_SHIFT = 6;        // 64B line
-static const int LINES_PER_PAGE = 1 << (PAGE_SHIFT - LINE_SHIFT);
-static const int MAX_OFFSETS = 5;       // top-5 offsets per region
-static const int DEFAULT_TABLE_SIZE = 128;
-
-// ---------------- DATA STRUCTURES ----------------
+// ------------------------------
+// per-page offset bookkeeping
+// ------------------------------
 struct OffsetEntry {
-    int32_t offset = 0;
-    uint32_t freq = 0;
+    int32_t  delta   = 0;   // same-page line delta (cur_line - prev_line)
+    uint32_t freq    = 0;   // how often observed (training)
+    uint32_t conf    = 0;   // confidence: bumps when a pf from this delta is later used (timely or late)
 };
 
 struct RegionEntry {
-    uint64_t signature = 0;
-    uint64_t last_line = 0;
-    bool valid = false;
-    array<OffsetEntry, MAX_OFFSETS> offsets;
-    uint64_t last_access_cycle = 0;
+    uint64_t page     = 0;
+    bool     valid    = false;
+    int32_t  last_ln  = -1;          // last accessed line in this page
+    OffsetEntry top[TOPK];           // top-K candidates per page
 };
 
-// Prefetcher global state
-static vector<RegionEntry> region_table;
-static bool initialized = false;
-static int TABLE_SIZE = DEFAULT_TABLE_SIZE;
-static uint64_t prefetch_issued = 0;
-static uint64_t prefetch_useful = 0;
+// ------------------------------
+// globals
+// ------------------------------
+static std::vector<RegionEntry> region_table;
+static int  TABLE_SIZE   = DEFAULT_TABLE_SIZE;
+static bool initialized  = false;
 
-// ---------------- HELPERS ----------------
-inline uint64_t line_index(uint64_t addr) { return addr >> LINE_SHIFT; }
-inline uint64_t page_base(uint64_t addr) { return (addr >> PAGE_SHIFT) << PAGE_SHIFT; }
-inline uint64_t make_signature(uint64_t addr, uint64_t ip) {
-    uint64_t page = addr >> PAGE_SHIFT;
-    uint64_t v = page ^ (ip * 0x9e3779b97f4a7c15ULL);
-    v ^= v >> 33; v *= 0xff51afd7ed558ccdULL;
-    v ^= v >> 33; v *= 0xc4ceb9fe1a85ec53ULL;
-    v ^= v >> 33;
-    return v;
+// stats you asked for
+static uint64_t pf_issued         = 0;
+static uint64_t pf_useful_timely  = 0;   // demand hit in L2 on a prefetched line
+static uint64_t pf_useful_late    = 0;   // demand touched a prefetched line but missed in L2 (arrived too late)
+
+// track outstanding prefetch targets (per line)
+static std::unordered_set<uint64_t> outstanding;        // line_addr of prefetched lines
+
+// tiny “recent demands” filter so we don’t re-prefetch what we just touched
+static std::unordered_set<uint64_t> recent_demand;
+static std::deque<uint64_t>         recent_fifo;
+
+// ------------------------------
+// helpers
+// ------------------------------
+static inline uint64_t page_num(uint64_t addr) { return addr >> LOG2_PAGE_SIZE; }
+static inline uint64_t page_base(uint64_t addr) { return addr & ~((1ULL << LOG2_PAGE_SIZE) - 1ULL); }
+static inline uint64_t line_addr(uint64_t addr) { return addr >> LOG2_BLOCK_SIZE; }
+static inline int32_t  line_in_page(uint64_t addr) { return int32_t((addr >> LOG2_BLOCK_SIZE) & (LINES_PER_PAGE - 1)); }
+
+static inline RegionEntry& get_region(uint64_t pg)
+{
+    size_t idx = size_t(pg % TABLE_SIZE);
+    RegionEntry& e = region_table[idx];
+    if (!e.valid || e.page != pg) {
+        e.valid   = true;
+        e.page    = pg;
+        e.last_ln = -1;
+        for (int i = 0; i < TOPK; i++) e.top[i] = OffsetEntry();
+    }
+    return e;
 }
 
-inline RegionEntry &get_region_entry(uint64_t sig) {
-    return region_table[sig % TABLE_SIZE];
+static inline void bump_recent(uint64_t la)
+{
+    recent_fifo.push_back(la);
+    recent_demand.insert(la);
+    if (recent_fifo.size() > RECENT_DEMAND_MAX) {
+        uint64_t victim = recent_fifo.front();
+        recent_fifo.pop_front();
+        recent_demand.erase(victim);
+    }
 }
 
-static void update_offsets(RegionEntry &e, int32_t offset) {
-    if (offset == 0) return;
+static inline void update_offset(RegionEntry& e, int32_t dlt)
+{
+    if (dlt == 0) return;
 
-    // Update frequency if already present
-    for (auto &oe : e.offsets) {
-        if (oe.offset == offset && oe.freq > 0) {
-            if (oe.freq < numeric_limits<uint32_t>::max()) oe.freq++;
+    // hit: bump freq
+    for (int i = 0; i < TOPK; i++) {
+        if (e.top[i].freq && e.top[i].delta == dlt) {
+            if (e.top[i].freq < std::numeric_limits<uint32_t>::max())
+                e.top[i].freq++;
             return;
         }
     }
-
-    // Otherwise, insert into empty slot or replace min frequency
-    int replace_idx = -1;
-    uint32_t min_freq = numeric_limits<uint32_t>::max();
-    for (int i = 0; i < MAX_OFFSETS; ++i) {
-        if (e.offsets[i].freq == 0) { replace_idx = i; break; }
-        if (e.offsets[i].freq < min_freq) {
-            min_freq = e.offsets[i].freq;
-            replace_idx = i;
-        }
+    // miss: place in weakest slot (min freq or empty)
+    int repl = -1; uint32_t minf = std::numeric_limits<uint32_t>::max();
+    for (int i = 0; i < TOPK; i++) {
+        if (e.top[i].freq == 0) { repl = i; break; }
+        if (e.top[i].freq < minf) { minf = e.top[i].freq; repl = i; }
     }
-
-    if (replace_idx >= 0) {
-        e.offsets[replace_idx].offset = offset;
-        e.offsets[replace_idx].freq = 1;
+    if (repl >= 0) {
+        e.top[repl].delta = dlt;
+        e.top[repl].freq  = 1;
+        e.top[repl].conf  = 0;
     }
 }
 
-static bool cmp(const pair<uint32_t,int32_t> &a, const pair<uint32_t,int32_t> &b) {
-    return a.first > b.first;
+// sort by (confidence desc, frequency desc, |delta| asc)
+struct ByConfThenFreq {
+    bool operator()(const OffsetEntry& a, const OffsetEntry& b) const {
+        if (a.conf != b.conf) return a.conf > b.conf;
+        if (a.freq != b.freq) return a.freq > b.freq;
+        return (std::abs(a.delta) < std::abs(b.delta));
+    }
+};
+
+static inline void remember_pf(uint64_t pf_addr)
+{
+    outstanding.insert(line_addr(pf_addr));
 }
 
-static void issue_prefetches(CACHE *cache, RegionEntry &e, uint64_t ref_addr, uint64_t ip) {
-    // Compute degree based on precision (optional)
-    int degree = 2; // simple fixed degree
+// training on an address (for both LOAD and WRITEBACK in exclusive hier.)
+static inline void train_on_addr(uint64_t addr)
+{
+    uint64_t  pg  = page_num(addr);
+    RegionEntry& e = get_region(pg);
+    int32_t   cur = line_in_page(addr);
 
-    vector<pair<uint32_t,int32_t>> offs;
-    for (int i = 0; i < MAX_OFFSETS; ++i) {
-        if (e.offsets[i].freq) offs.emplace_back(e.offsets[i].freq, e.offsets[i].offset);
+    if (e.last_ln >= 0) {
+        int32_t dlt = cur - e.last_ln;
+        if (dlt != 0 && dlt > -LINES_PER_PAGE && dlt < LINES_PER_PAGE)
+            update_offset(e, dlt);
     }
-    if (offs.empty()) return;
-    sort(offs.begin(), offs.end(), cmp);
-
-    int issued = 0;
-    uint64_t page = page_base(ref_addr);
-    int64_t ref_line = line_index(ref_addr);
-
-    for (auto &o : offs) {
-        if (issued >= degree) break;
-
-        int64_t target_line = ref_line + o.second;
-        int64_t base_line = page >> LINE_SHIFT;
-
-        if (target_line < base_line || target_line >= base_line + LINES_PER_PAGE)
-            continue;
-
-        uint64_t target_addr = target_line << LINE_SHIFT;
-
-        if (target_addr == ref_addr) continue;
-
-        bool ok = cache->prefetch_line(ip, ref_addr, target_addr, FILL_L2, 0);
-        if (ok) { prefetch_issued++; issued++; }
-    }
+    e.last_ln = cur;
 }
 
-// ---------------- PREFETCHER METHODS ----------------
+// aggressiveness: keep it conservative; scale by **timely** accuracy only
+static inline int compute_degree()
+{
+    double acc = (pf_issued == 0) ? 0.0 : double(pf_useful_timely) / double(pf_issued);
+    if (acc >= 0.60) return 4;
+    if (acc >= 0.30) return 2;
+    return 1;
+}
 
-void CACHE::l2c_prefetcher_initialize() {
+// ------------------------------
+// ChampSim entry points
+// ------------------------------
+void CACHE::l2c_prefetcher_initialize()
+{
     if (initialized) return;
 
-    const char *env = getenv("REGION_PREF_TABLE");
-    if (env) { int v = atoi(env); if (v > 0) TABLE_SIZE = v; }
-    else TABLE_SIZE = DEFAULT_TABLE_SIZE;
+    const char* env = getenv("OFFSET_TABLE");
+    if (env) {
+        int v = atoi(env);
+        if (v == 32 || v == 64 || v == 128) TABLE_SIZE = v;
+    }
+    region_table.assign(TABLE_SIZE, RegionEntry());
 
-    region_table.clear();
-    region_table.resize(TABLE_SIZE);
-    prefetch_issued = 0;
-    prefetch_useful = 0;
+    pf_issued = 0;
+    pf_useful_timely = 0;
+    pf_useful_late   = 0;
+    outstanding.clear();
+    recent_demand.clear();
+    recent_fifo.clear();
+
     initialized = true;
-
-    cout << "CPU " << cpu << " Region-based L2 offset prefetcher (table=" << TABLE_SIZE << " entries)" << endl;
+    std::cout << "CPU " << cpu << " L2 offset prefetcher (exclusive-aware) active, table=" << TABLE_SIZE << "\n";
 }
 
+// NOTE: ‘type’ uses ChampSim’s enums. We’ll:
+//   • train on LOAD and WRITEBACK
+//   • issue prefetches only on LOAD (type==LOAD)
+//   • count usefulness only on LOAD; classify TIMELY using cache_hit
 uint32_t CACHE::l2c_prefetcher_operate(uint64_t addr, uint64_t ip,
                                        uint8_t cache_hit, uint8_t type,
-                                       uint32_t metadata_in, uint8_t is_writeback) 
+                                       uint32_t metadata_in,
+                                       uint8_t /*critical_ip_flag*/)
 {
     if (!initialized) l2c_prefetcher_initialize();
 
-    uint64_t sig = make_signature(addr, ip);
-    RegionEntry &e = get_region_entry(sig);
+    const uint64_t la = line_addr(addr);
 
-    uint64_t cur_line = line_index(addr);
+    // 1) On LOADs, record usefulness if this line was prefetched
+    if (type == LOAD) {
+        bump_recent(la);
+        auto it = outstanding.find(la);
+        if (it != outstanding.end()) {
+            // If we hit in L2 when consuming a prefetched line → timely, else late
+            if (cache_hit) pf_useful_timely++; else pf_useful_late++;
+            outstanding.erase(it);
 
-    if (e.valid && e.signature == sig) {
-        int32_t offset = (int32_t)(cur_line - e.last_line);
-        if (offset != 0 && llabs(offset) < LINES_PER_PAGE) update_offsets(e, offset);
-        e.last_line = cur_line;
-        e.last_access_cycle = 1;
-    } else {
-        e.valid = true;
-        e.signature = sig;
-        e.last_line = cur_line;
-        e.last_access_cycle = 1;
-        for (auto &o : e.offsets) { o.offset = 0; o.freq = 0; }
+            // bump confidence on the delta that likely produced it (best-effort):
+            // find current page entry and increment the highest-conf delta closest to (cur - last)
+            RegionEntry& e = get_region(page_num(addr));
+            int32_t cur = line_in_page(addr);
+            // We don't know exact producer delta cheaply; give credit to top candidate
+            // that points toward cur from e.last_ln (best-effort; cheap & stable).
+            int best = -1; uint32_t best_conf = 0;
+            for (int i = 0; i < TOPK; i++) {
+                if (e.top[i].freq && e.top[i].conf >= best_conf) {
+                    best_conf = e.top[i].conf; best = i;
+                }
+            }
+            if (best >= 0 && e.top[best].conf < std::numeric_limits<uint32_t>::max())
+                e.top[best].conf++;
+        }
     }
 
-    // Only trigger prefetches on CPU misses, not writebacks
-    if (!is_writeback && cache_hit == 0) issue_prefetches(this, e, addr, ip);
+    // 2) TRAIN: on LOAD and WRITEBACK (exclusive hierarchy sends evicted L1 lines to L2)
+    if (type == LOAD || type == WRITEBACK) {
+        train_on_addr(addr);
+    }
+
+    // 3) ISSUE: only on LOADs
+    if (type == LOAD) {
+        RegionEntry& e = get_region(page_num(addr));
+
+        // collect candidates that have “enough” signal
+        std::vector<OffsetEntry> cand;
+        cand.reserve(TOPK);
+        for (int i = 0; i < TOPK; i++) {
+            if (e.top[i].freq >= FREQ_MIN_FOR_USE || e.top[i].conf >= CONF_THRESH)
+                cand.push_back(e.top[i]);
+        }
+        if (cand.empty()) return metadata_in;
+
+        std::sort(cand.begin(), cand.end(), ByConfThenFreq());
+
+        int      deg      = compute_degree();
+        int32_t  cur_line = line_in_page(addr);
+        uint64_t base     = page_base(addr);
+
+        int issued = 0;
+        for (size_t k = 0; k < cand.size() && issued < deg; k++) {
+            const int32_t dlt = cand[k].delta;
+
+            // tiny extra guard (avoid super-noisy entries)
+            if (cand[k].conf < CONF_THRESH && cand[k].freq < FREQ_MIN_FOR_USE) continue;
+
+            int32_t target = cur_line + dlt;
+            if (target < 0 || target >= LINES_PER_PAGE) continue;
+
+            uint64_t pf_addr = base | (uint64_t(target) << LOG2_BLOCK_SIZE);
+            uint64_t pf_line = line_addr(pf_addr);
+
+            // filter: never prefetch the demand line itself, nor very recent demand, nor duplicates
+            if (pf_addr == addr) continue;
+            if (recent_demand.count(pf_line)) continue;
+            if (outstanding.count(pf_line))   continue;
+
+            if (prefetch_line(ip, addr, pf_addr, FILL_L2, 0 /*metadata*/)) {
+                pf_issued++;
+                remember_pf(pf_addr);
+                issued++;
+            }
+        }
+    }
 
     return metadata_in;
 }
 
-uint32_t CACHE::l2c_prefetcher_cache_fill(uint64_t addr, uint32_t set, uint32_t match,
-                                          uint8_t prefetch, uint64_t evicted_addr,
+// No extra work needed for fills in this version (non-inclusive/exclusive both OK).
+uint32_t CACHE::l2c_prefetcher_cache_fill(uint64_t /*addr*/, uint32_t /*set*/,
+                                          uint32_t /*match*/, uint8_t /*prefetch*/,
+                                          uint64_t /*evicted_addr*/,
                                           uint32_t metadata_in)
 {
-    if (prefetch) prefetch_useful++;
     return metadata_in;
 }
 
-void CACHE::l2c_prefetcher_final_stats() {
+void CACHE::l2c_prefetcher_final_stats()
+{
     if (!initialized) return;
+    const uint64_t useful_total = pf_useful_timely + pf_useful_late;
+    const double   timely_acc   = (pf_issued == 0) ? 0.0 : double(pf_useful_timely) / double(pf_issued);
 
-    cout << "CPU " << cpu << " Region-based offset prefetcher stats:\n";
-    cout << "  Prefetches issued: " << prefetch_issued << "\n";
-    cout << "  Prefetches useful (approx): " << prefetch_useful << "\n";
-    double prec = (prefetch_issued ? (double)prefetch_useful / (double)prefetch_issued : 0.0);
-    cout << "  Precision (useful/issued): " << prec << "\n";
+    std::cout << "=== L2 Offset Prefetcher (exclusive-aware) ===\n";
+    std::cout << "Prefetches issued     : " << pf_issued << "\n";
+    std::cout << "Useful (timely)       : " << pf_useful_timely << "\n";
+    std::cout << "Useful (late)         : " << pf_useful_late << "\n";
+    std::cout << "Useful (total)        : " << useful_total << "\n";
+    std::cout << "Timely accuracy       : " << timely_acc << "\n";
+    std::cout << "Table size            : " << TABLE_SIZE << "\n";
+    std::cout << "TOPK                  : " << TOPK << "\n";
+    std::cout << "CONF_THRESH           : " << CONF_THRESH << "\n";
+    std::cout << "=============================================\n";
 }
