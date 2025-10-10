@@ -1,7 +1,15 @@
 # CS683 – Programming Assignment 2  
 ## Data Prefetching in Exclusive vs Non-Inclusive Cache Hierarchies  
-**Team:** Latency Yoddhas  
-**Date:** October 2025  
+## Course Information
+- **Course:** CS683: Advanced Computer Architecture  
+- **Instructor:** Prof. Biswabandan Panda  
+- **Semester:** Aug 2025 – Present  
+- **Team Members:**  
+  - Aritra Belel [24M0814]  
+  - Sougata Sarkar [24M0790]  
+  - Hariom Mewada [24M2137]  
+- **Team Name:** Latency Yoddhas
+
 
 ---
 
